@@ -38,6 +38,7 @@ func main() {
 	}
 	router := gin.Default()
 	router.POST("/add", add_word)
+	router.POST("/get_words", get_words)
 	router.Run()
 }
 
@@ -55,6 +56,43 @@ func add_word(c *gin.Context) {
 		log.Fatalf("Failed to add row: %v", err)
 	}
 	fmt.Println("Word added succesfully")
+}
+
+func get_words(c *gin.Context) {
+	sort_by := c.Query("sort_by")
+
+	validColumns := map[string]bool{
+		"word":       true,
+		"definition": true,
+		"book":       true,
+		"author":     true,
+		"language":   true,
+		"created_at": true,
+	}
+	if !validColumns[sort_by] {
+		c.JSON(400, gin.H{"error": "Invalid sort_by value"})
+		return
+	}
+	query := fmt.Sprintf("SELECT word, definition, book, author, language, created_at FROM words ORDER BY %s ASC", sort_by)
+
+	rows, err := dbconn.Query(context.Background(), query)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to retrieve data"})
+		return
+	}
+	defer rows.Close()
+
+	var words []Word
+	for rows.Next() {
+		var word Word
+		err = rows.Scan(&word.Word, &word.Definition, &word.Book, &word.Author, &word.Language, &word.Created_at)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to parse data"})
+			return
+		}
+		words = append(words, word)
+	}
+	c.JSON(200, words)
 }
 
 func connect() bool {

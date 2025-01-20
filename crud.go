@@ -1,4 +1,4 @@
-package main
+package test
 
 import (
 	"bufio"
@@ -11,12 +11,11 @@ import (
 )
 
 const (
-	DATABASE_URL = "postgresql://postgres:kM1cRUCzYjhgnmvH@db.guewpidbdcotuuzomsbs.supabase.co:5432/postgres"
-	ADD          = 1
-	REMOVE       = 2
-	EDIT         = 3
-	PRINT        = 4
-	QUIT         = 5
+	ADD    = 1
+	REMOVE = 2
+	EDIT   = 3
+	PRINT  = 4
+	QUIT   = 5
 )
 
 func main() {
@@ -27,7 +26,6 @@ func main() {
 			var action int
 			fmt.Println("1: Add Word; 2: Remove Word; 3: Edit definition, 4: Print table, 5: quit ")
 			fmt.Scan(&action)
-
 			switch action {
 			case ADD:
 				insert_row(conn)
@@ -69,6 +67,22 @@ func insert_row(conn *pgx.Conn) {
 	}
 }
 
+// receives a word and its data. It adds a row using said data. On error it returns -1
+func add_word(word string, definition string, book string, author string, language string) int {
+	connected, conn := connect()
+	defer conn.Close(context.Background())
+	if !connected {
+		return -1
+	}
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO words (word, definition, book, author, language) VALUES ($1, $2, $3, $4, $5)", word, definition, book, author, language)
+	if err != nil {
+		log.Fatalf("Failed to add row: %v", err)
+		return -1
+	}
+	return 1
+}
+
 func update_definition(conn *pgx.Conn) {
 	var word string
 	fmt.Println("Type word you want to update")
@@ -84,7 +98,7 @@ func update_definition(conn *pgx.Conn) {
 }
 
 func connect() (bool, *pgx.Conn) {
-	conn, err := pgx.Connect(context.Background(), DATABASE_URL)
+	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
 		return false, conn
