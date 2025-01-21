@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
@@ -37,8 +38,12 @@ func main() {
 		return
 	}
 	router := gin.Default()
+
+	router.Use(cors.Default())
+
 	router.POST("/add", add_word)
 	router.POST("/get_words", get_words)
+	router.GET("/get_word/:id", word_id)
 	router.Run()
 }
 
@@ -93,6 +98,27 @@ func get_words(c *gin.Context) {
 		words = append(words, word)
 	}
 	c.JSON(200, words)
+}
+
+func word_id(c *gin.Context) {
+	id := c.Query("id")
+	query := fmt.Sprintf("SELECT word, definition, book, author, language, created_at FROM words WHERE id = %s", id)
+	rows, err := dbconn.Query(context.Background(), query)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to retrieve data"})
+		return
+	}
+	defer rows.Close()
+
+	var word Word
+	for rows.Next() {
+		err = rows.Scan(&word.Word, &word.Definition, &word.Book, &word.Author, &word.Language, &word.Created_at)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to parse data"})
+			return
+		}
+	}
+	c.JSON(200, word)
 }
 
 func connect() bool {
