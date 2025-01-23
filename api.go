@@ -12,15 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const (
-	ADD    = 1
-	REMOVE = 2
-	EDIT   = 3
-	PRINT  = 4
-	QUIT   = 5
-)
-
 type Word struct {
+	Id         int       `json:"id"`
 	Word       string    `json:"word"`
 	Definition string    `json:"definition"`
 	Book       string    `json:"book"`
@@ -42,6 +35,7 @@ func main() {
 	router.Use(cors.Default())
 
 	router.POST("/add", add_word)
+	router.POST("/update", update_word)
 	router.POST("/get_words", get_words)
 	router.GET("/get_word/:id", word_id)
 	router.Run()
@@ -51,14 +45,15 @@ func add_word(c *gin.Context) {
 	var word Word
 	err := c.ShouldBind(&word)
 	if err != nil {
-		log.Fatalf("Couldn't add word: %v", err)
+		c.JSON(500, gin.H{"error": "Failed to add word"})
 		return
 	}
 	_, err = dbconn.Exec(context.Background(),
 		"INSERT INTO words (word, definition, created_at, book, author, language) VALUES ($1, $2,$3,$4,$5,$6)",
 		word.Word, word.Definition, word.Created_at, word.Book, word.Author, word.Language)
 	if err != nil {
-		log.Fatalf("Failed to add row: %v", err)
+		c.JSON(500, gin.H{"error": "Failed to add word"})
+		return
 	}
 	fmt.Println("Word added succesfully")
 }
@@ -67,6 +62,7 @@ func get_words(c *gin.Context) {
 	sort_by := c.Query("sort_by")
 
 	validColumns := map[string]bool{
+		"id":         true,
 		"word":       true,
 		"definition": true,
 		"book":       true,
@@ -78,7 +74,7 @@ func get_words(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid sort_by value"})
 		return
 	}
-	query := fmt.Sprintf("SELECT word, definition, book, author, language, created_at FROM words ORDER BY %s ASC", sort_by)
+	query := fmt.Sprintf("SELECT id, word, definition, book, author, language, created_at FROM words ORDER BY %s ASC", sort_by)
 
 	rows, err := dbconn.Query(context.Background(), query)
 	if err != nil {
@@ -90,7 +86,7 @@ func get_words(c *gin.Context) {
 	var words []Word
 	for rows.Next() {
 		var word Word
-		err = rows.Scan(&word.Word, &word.Definition, &word.Book, &word.Author, &word.Language, &word.Created_at)
+		err = rows.Scan(&word.Id, &word.Word, &word.Definition, &word.Book, &word.Author, &word.Language, &word.Created_at)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to parse data"})
 			return
@@ -117,6 +113,22 @@ func word_id(c *gin.Context) {
 			c.JSON(500, gin.H{"error": "Failed to parse data"})
 			return
 		}
+	}
+	c.JSON(200, word)
+}
+
+func update_word(c *gin.Context) {
+	var word Word
+	query := "UPDATE words SET word = ($1), definition = ($2), book = ($3), author = ($4), language = ($5), created_at = ($6) WHERE id = ($7)"
+	if c.ShouldBind(&word) != nil {
+		c.JSON(500, gin.H{"error": "Failed to parse data"})
+		return
+	}
+	_, err := dbconn.Exec(context.Background(), query,
+		word.Word, word.Definition, word.Book, word.Author, word.Language, word.Created_at, word.Id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to update word"})
+		return
 	}
 	c.JSON(200, word)
 }
